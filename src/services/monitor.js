@@ -12,8 +12,11 @@ function criarMonitor({ busca, repo, config, logger = console }) {
   let timer = null;
   let rodando = false;
 
-  const assinatura = (movs) => crypto.createHash('sha1')
-    .update(movs.map(chaveMovimento).join('\n')).digest('hex');
+  // A assinatura leva a "fonte" das movimentações (prioridade): textos de
+  // fontes diferentes não são comparáveis linha a linha.
+  const fonteMovs = (p) => String(p.prioridadeMovimentos ?? 1);
+  const assinatura = (p) => `${fonteMovs(p)}:${crypto.createHash('sha1')
+    .update(p.movimentos.map(chaveMovimento).join('\n')).digest('hex')}`;
 
   function estado(processo) {
     return {
@@ -21,7 +24,7 @@ function criarMonitor({ busca, repo, config, logger = console }) {
       tribunal: processo.tribunal?.sigla || null,
       classe: processo.classe?.nome || null,
       totalMovimentos: processo.movimentos.length,
-      assinatura: assinatura(processo.movimentos),
+      assinatura: assinatura(processo),
       ultimaMovimentacao: processo.movimentos[0]?.data || null,
     };
   }
@@ -73,9 +76,16 @@ function criarMonitor({ busca, repo, config, logger = console }) {
     const novo = estado(processo);
     let novos = [];
     if (novo.assinatura !== anterior.assinatura) {
-      novos = anterior.ultima_movimentacao
-        ? processo.movimentos.filter((m) => (m.data || '') > anterior.ultima_movimentacao)
-        : processo.movimentos.slice(0, Math.max(0, novo.totalMovimentos - anterior.total_movimentos));
+      const mesmaFonte = String(anterior.assinatura || '').startsWith(`${fonteMovs(processo)}:`);
+      const ultima = anterior.ultima_movimentacao || '';
+      if (!ultima) {
+        novos = processo.movimentos.slice(0, Math.max(0, novo.totalMovimentos - anterior.total_movimentos));
+      } else if (mesmaFonte) {
+        novos = processo.movimentos.filter((m) => (m.data || '') > ultima);
+      } else {
+        // Fonte trocou (ex.: portal fora do ar → DataJud): compara só pelo dia.
+        novos = processo.movimentos.filter((m) => (m.data || '').slice(0, 10) > ultima.slice(0, 10));
+      }
       for (const m of novos.slice().reverse()) {
         repo.criarAlerta({
           numero,

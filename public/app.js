@@ -158,7 +158,8 @@
           </span>
         </div>
         <div class="item-classe">${p.classe?.nome || 'Classe não informada'}</div>
-        ${ativo.length || passivo.length ? raw(html`<div class="item-partes">${ativo.join(', ') || '—'}<span class="x">×</span>${passivo.join(', ') || '—'}</div>`) : ''}
+        ${ativo.length && passivo.length ? raw(html`<div class="item-partes">${ativo.join(', ')}<span class="x">×</span>${passivo.join(', ')}</div>`)
+    : (p.partes || []).length ? raw(html`<div class="item-partes">${p.partes.map((x) => `${x.tipo ? `${x.tipo}: ` : ''}${x.nome}`).join(' · ')}</div>`) : ''}
         ${p.assuntos?.length ? raw(html`<div class="item-partes">${p.assuntos.map((a) => a.nome).join(' · ')}</div>`) : ''}
         <div class="item-rodape">
           ${p.orgaoJulgador?.nome ? raw(html`<span>${p.orgaoJulgador.nome}</span>`) : ''}
@@ -222,12 +223,14 @@
 
   async function paginaBusca(params) {
     const q = params.get('q') || '';
+    const selecionados = (params.get('tribunais') || '').split(',').filter(Boolean);
     document.title = `${q} — Lexxproc`;
-    $app.innerHTML = html`${raw(formBusca(q, true))}<div id="res">${raw(esqueleto(4))}</div>`;
+    $app.innerHTML = html`${raw(formBusca(q, true))}<div id="filtro-trib"></div><div id="res">${raw(esqueleto(4))}</div>`;
     ligarBusca();
+    desenharFiltroTribunais(q, selecionados);
     const $res = document.getElementById('res');
     try {
-      const r = await api(`/busca?q=${encodeURIComponent(q)}${params.get('atualizar') ? '&atualizar=1' : ''}`);
+      const r = await api(`/busca?q=${encodeURIComponent(q)}${selecionados.length ? `&tribunais=${selecionados.join(',')}` : ''}${params.get('atualizar') ? '&atualizar=1' : ''}`);
       if (r.tipo === 'cnj') {
         location.replace(`#/processo/${r.termo.replace(/\D/g, '')}`);
         return;
@@ -236,19 +239,42 @@
         <div class="cab-pagina">
           <div><h2>${r.total} processo${r.total === 1 ? '' : 's'} encontrado${r.total === 1 ? '' : 's'}</h2>
             <p>Busca por <span class="tag tag-azul">${ROTULOS[r.tipo]}</span> <b>${r.termo}</b>${r.cache ? raw(' <span class="tag">em cache</span>') : ''}</p></div>
-          <a class="btn btn-pequeno" href="#/busca?q=${encodeURIComponent(q)}&atualizar=1">Atualizar</a>
+          <a class="btn btn-pequeno" href="#/busca?q=${encodeURIComponent(q)}${selecionados.length ? `&tribunais=${selecionados.join(',')}` : ''}&atualizar=1">Atualizar</a>
         </div>
         ${raw(errosProvedores(r.erros))}
+        ${r.avisos?.length ? raw(html`<div class="msg msg-info">${r.avisos.join(' · ')}</div>`) : ''}
         ${r.total ? raw(html`<div class="lista-processos">${r.resultados.map((p) => raw(itemProcesso(p)))}</div>`)
     : raw('<div class="vazio card"><div class="icone">🗂</div><p>Nenhum processo encontrado para este termo.</p></div>')}`;
     } catch (e) {
       $res.innerHTML = html`${raw(erroBox(e))}${e.status === 501 ? raw(html`
         <div class="card"><h3>Como habilitar este tipo de busca</h3>
         <p class="mudo">A API pública do CNJ não divulga as partes dos processos. Para buscar por nome, CPF/CNPJ ou OAB,
-        configure um provedor no servidor (variáveis <span class="mono">ESCAVADOR_TOKEN</span> ou <span class="mono">JUDIT_API_KEY</span>).
+        habilite a raspagem dos tribunais (<span class="mono">SCRAPER_ENABLED=1</span>) ou configure um provedor
+        (<span class="mono">ESCAVADOR_TOKEN</span> ou <span class="mono">JUDIT_API_KEY</span>).
         Enquanto isso, pesquise pelo número do processo ou use a <a href="#/avancada">busca avançada</a>.</p></div>`) : ''}`;
     }
   }
+
+  function desenharFiltroTribunais(q, selecionados) {
+    const trib = estado.status?.raspagem?.habilitado ? estado.status.raspagem.tribunais : [];
+    const $f = document.getElementById('filtro-trib');
+    if (!$f || !trib.length || detectar(q) === 'cnj') return;
+    const ativo = (s) => !selecionados.length || selecionados.includes(s);
+    $f.innerHTML = html`<div class="filtro-tribunais" role="group" aria-label="Tribunais pesquisados">
+      <span class="mudo">Tribunais pesquisados por raspagem:</span>
+      ${trib.map((t) => raw(html`<button type="button" class="chip ${ativo(t.sigla) ? 'chip-ativo' : ''}" data-sigla="${t.sigla}" aria-pressed="${ativo(t.sigla)}">${t.sigla}</button>`))}
+    </div>`;
+    $f.querySelectorAll('[data-sigla]').forEach((b) => b.addEventListener('click', () => {
+      const atual = new Set(selecionados.length ? selecionados : trib.map((t) => t.sigla));
+      if (atual.has(b.dataset.sigla)) atual.delete(b.dataset.sigla); else atual.add(b.dataset.sigla);
+      if (!atual.size) return toast('Selecione ao menos um tribunal');
+      const todos = atual.size === trib.length;
+      location.hash = `#/busca?q=${encodeURIComponent(q)}${todos ? '' : `&tribunais=${[...atual].join(',')}`}`;
+      return null;
+    }));
+  }
+
+  const rotuloFonte = (f) => (f === 'datajud' ? 'DataJud/CNJ' : f.startsWith('raspagem:') ? `Portal do ${f.split(':')[1].toUpperCase()}` : f);
 
   async function paginaProcesso(numero, params) {
     document.title = `${fmtCNJ(numero)} — Lexxproc`;
@@ -321,6 +347,8 @@
           <div><dt>Valor da causa</dt><dd>${p.valorCausa || '—'}</dd></div>
         </dl>
         ${raw(errosProvedores(r.erros))}
+        ${p.avisos?.length ? raw(html`<div class="msg msg-alerta">${p.avisos.join(' · ')}</div>`) : ''}
+        <p class="fontes mudo">Fontes: ${p.fontes.map(rotuloFonte).join(' + ')}</p>
         <div class="abas" role="tablist">
           <button role="tab" aria-selected="true" data-aba="mov">Movimentações <span class="cont">${p.movimentos.length}</span></button>
           <button role="tab" aria-selected="false" data-aba="partes">Partes <span class="cont">${p.partes.length}</span></button>
@@ -382,8 +410,8 @@
     document.getElementById('aba-partes').innerHTML = p.partes.length ? html`
       <div class="partes-grade">${raw(blocoPolo('Polo ativo', ativos))}${raw(blocoPolo('Polo passivo', passivos))}</div>
       ${outros.length ? raw(html`<div class="partes-grade" style="margin-top:16px">${raw(blocoPolo('Outros participantes', outros))}</div>`) : ''}`
-      : html`<div class="msg msg-info">A API pública do CNJ (DataJud) não divulga as partes dos processos.
-        Configure um provedor como Escavador ou Judit no servidor para exibir partes e advogados.</div>`;
+      : html`<div class="msg msg-info">A API pública do CNJ (DataJud) não divulga as partes dos processos, e este tribunal
+        ainda não tem raspador disponível. Configure Escavador ou Judit no servidor para exibir partes e advogados.</div>`;
 
     // Detalhes
     const linhas = [
@@ -393,6 +421,9 @@
       ['Classe', p.classe ? `${p.classe.nome}${p.classe.codigo ? ` (código ${p.classe.codigo})` : ''}` : null],
       ['Assuntos', p.assuntos.map((a) => `${a.nome}${a.codigo ? ` (${a.codigo})` : ''}`).join('; ')],
       ['Órgão julgador', p.orgaoJulgador ? `${p.orgaoJulgador.nome}${p.orgaoJulgador.codigo ? ` (código ${p.orgaoJulgador.codigo})` : ''}` : null],
+      ['Juiz(a)', p.juiz],
+      ['Área', p.area],
+      ['Situação', p.situacao],
       ['Graus', p.graus.join(', ')],
       ['Data de ajuizamento', fmtData(p.dataAjuizamento, true)],
       ['Última atualização na fonte', fmtData(p.ultimaAtualizacao, true)],
@@ -400,7 +431,7 @@
       ['Formato', p.formato],
       ['Valor da causa', p.valorCausa],
       ['Nível de sigilo', String(p.nivelSigilo ?? 0)],
-      ['Fontes consultadas', p.fontes.join(', ')],
+      ['Fontes consultadas', p.fontes.map(rotuloFonte).join(', ')],
     ].filter(([, v]) => v && v !== '—');
     document.getElementById('aba-det').innerHTML = html`
       <dl class="detalhes">${linhas.map(([k, v]) => raw(html`<dt>${k}</dt><dd>${v}</dd>`))}</dl>
@@ -585,12 +616,24 @@
     document.title = 'Tribunais — Lexxproc';
     const tribunais = estado.tribunais || (estado.tribunais = await api('/tribunais'));
     const segmentos = [...new Set(tribunais.map((t) => t.segmento))];
+    const rasp = estado.status?.raspagem;
+    const raspados = new Map((rasp?.habilitado ? rasp.tribunais : []).map((t) => [t.sigla, t]));
+    const pausados = new Map((rasp?.hosts || []).filter((h) => h.pausadoAte).map((h) => [h.host, h]));
+    const tagRasp = (sigla) => {
+      const t = raspados.get(sigla);
+      if (!t) return '';
+      const pausa = pausados.get(new URL(t.portal).host);
+      return pausa ? html`<span class="tag tag-laranja" title="${pausa.motivo}">raspagem pausada</span>`
+        : html`<span class="tag tag-verde" title="${t.verificado ? 'Estrutura conferida com o portal real' : 'Mesmo sistema (e-SAJ); ainda não conferido'}">raspagem${t.verificado ? ' ✓' : ''}</span>`;
+    };
     $app.innerHTML = html`
       <div class="cab-pagina"><div><h1>Tribunais cobertos</h1>
-        <p>${tribunais.filter((t) => t.disponivelDataJud).length} tribunais disponíveis via API Pública do DataJud. O código J.TR identifica o tribunal no número CNJ.</p></div></div>
+        <p>${tribunais.filter((t) => t.disponivelDataJud).length} tribunais disponíveis via API Pública do DataJud.
+          ${raspados.size ? `${raspados.size} com raspagem do portal (partes, advogados e busca por nome/CPF/OAB).` : ''}
+          O código J.TR identifica o tribunal no número CNJ.</p></div></div>
       ${segmentos.map((s) => raw(html`<section class="segmento"><h2>${s}</h2><div class="trib-grade">
         ${tribunais.filter((t) => t.segmento === s).map((t) => raw(html`
-          <div class="trib"><b>${t.sigla} ${t.disponivelDataJud ? '' : raw('<span class="tag tag-laranja">indisponível</span>')}</b>
+          <div class="trib"><b>${t.sigla} ${t.disponivelDataJud ? '' : raw('<span class="tag tag-laranja">indisponível</span>')} ${raw(tagRasp(t.sigla))}</b>
             <span>${t.nome}</span><br><span class="mono mudo">J.TR ${t.j}.${t.tr}</span></div>`))}
       </div></section>`))}`;
   }
@@ -652,11 +695,10 @@
     }
   });
   window.addEventListener('hashchange', rotear);
+  atualizarBadge();
+  setInterval(atualizarBadge, 120000);
   api('/status').then((s) => {
     estado.status = s;
     document.getElementById('aviso-demo').hidden = !s.modoDemonstracao;
-  }).catch(() => {});
-  atualizarBadge();
-  setInterval(atualizarBadge, 120000);
-  rotear();
+  }).catch(() => {}).finally(rotear);
 })();

@@ -9,6 +9,7 @@ const { criarDataJud, GRAUS } = require('./providers/datajud');
 const { criarEscavador } = require('./providers/escavador');
 const { criarJudit } = require('./providers/judit');
 const { criarDemo } = require('./providers/demo');
+const { criarRaspagem } = require('./providers/raspagem');
 const { criarServicoBusca } = require('./services/busca');
 const { criarMonitor } = require('./services/monitor');
 const { parseCNJ, detectarTipoBusca } = require('./lib/cnj');
@@ -16,7 +17,9 @@ const { TRIBUNAIS } = require('./lib/tribunais');
 
 function criarProvedores(config) {
   if (config.demoMode) return [criarDemo()];
-  return [criarDataJud(config), criarEscavador(config), criarJudit(config)];
+  // Ordem importa na busca por número: o DataJud traz metadados; a raspagem
+  // completa partes e movimentações detalhadas sem custo; os pagos ficam por último.
+  return [criarDataJud(config), criarRaspagem(config), criarEscavador(config), criarJudit(config)];
 }
 
 /** Limitador simples por IP (janela de 1 minuto). */
@@ -80,6 +83,7 @@ function criarApp(config, { provedores, logger = console } = {}) {
       versao: require('../package.json').version,
       modoDemonstracao: config.demoMode,
       provedores: busca.provedoresAtivos(),
+      raspagem: busca.raspagem(),
       monitoramento: { habilitado: config.monitor.enabled, intervaloMinutos: config.monitor.intervalMinutes },
       alertasNaoLidos: repo.contarNaoLidos(),
     });
@@ -105,7 +109,8 @@ function criarApp(config, { provedores, logger = console } = {}) {
   });
 
   api.get('/busca', handler(async (req, res) => {
-    res.json(await busca.buscar(req.query.q, { atualizar: req.query.atualizar === '1' }));
+    const tribunais = String(req.query.tribunais || '').split(',').map((s) => s.trim()).filter(Boolean);
+    res.json(await busca.buscar(req.query.q, { atualizar: req.query.atualizar === '1', tribunais }));
   }));
 
   api.get('/busca-avancada', handler(async (req, res) => {

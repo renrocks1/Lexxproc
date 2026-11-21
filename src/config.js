@@ -44,6 +44,17 @@ const config = {
     pollIntervalMs: Number(env.JUDIT_POLL_INTERVAL_MS || 2500),
     pollMaxAttempts: Number(env.JUDIT_POLL_MAX_ATTEMPTS || 24),
   },
+  raspagem: {
+    enabled: bool(env.SCRAPER_ENABLED, true),
+    // Lista de siglas a habilitar (ex.: "TJSP,TJAL"); vazio = todos os disponíveis.
+    tribunais: (env.SCRAPER_TRIBUNAIS || '').split(',').map((s) => s.trim()).filter(Boolean),
+    // Intervalo mínimo entre requisições ao mesmo portal (seja gentil com os tribunais).
+    intervaloMs: Number(env.SCRAPER_MIN_INTERVAL_MS || 1500),
+    pausaMinutos: Number(env.SCRAPER_PAUSE_MINUTES || 30),
+    maxPaginas: Number(env.SCRAPER_MAX_PAGES || 4),
+    maxPaginasMovimentacoes: Number(env.SCRAPER_MAX_MOVEMENT_PAGES || 20),
+    userAgent: env.SCRAPER_USER_AGENT || 'Mozilla/5.0 (compatible; LexxprocBot/1.0; consulta processual)',
+  },
   monitor: {
     enabled: bool(env.MONITOR_ENABLED, true),
     intervalMinutes: Number(env.MONITOR_INTERVAL_MINUTES || 360),

@@ -160,6 +160,11 @@ input:focus, select:focus { outline: none; border-color: var(--primaria); box-sh
 .busca-compacta .busca-form { box-shadow: none; padding: 6px; }
 .busca-compacta .busca-form input, .busca-compacta .busca-form .btn { height: 42px; }
 
+.filtro-tribunais { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -8px 0 20px; font-size: .86rem; }
+.chip { font: inherit; font-size: .8rem; font-weight: 600; border: 1px solid var(--borda); background: var(--bg-elev); color: var(--texto-2); border-radius: 999px; padding: 3px 11px; cursor: pointer; }
+.chip:hover { border-color: var(--primaria); }
+.chip-ativo { background: var(--primaria-sutil); border-color: var(--primaria); color: var(--primaria); }
+.fontes { font-size: .82rem; margin: -6px 0 14px; }
 .lista-processos { display: flex; flex-direction: column; gap: 12px; }
 .item-processo { display: block; color: inherit; background: var(--bg-elev); border: 1px solid var(--borda); border-radius: var(--raio); padding: 16px 18px; transition: border-color .15s, box-shadow .15s; }
 .item-processo:hover { text-decoration: none; border-color: var(--primaria); box-shadow: var(--sombra); }

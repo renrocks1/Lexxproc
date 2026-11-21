@@ -34,6 +34,8 @@ function novoProcesso(numero) {
     nivelSigilo: 0,
     valorCausa: null,
     situacao: null,
+    juiz: null,
+    area: null,
     partes: [],
     movimentos: [],
     fontes: [],
@@ -53,7 +55,7 @@ function mesclarProcessos(base, extra) {
   if (!base) return extra;
   if (!extra) return base;
   const r = { ...base };
-  for (const campo of ['classe', 'orgaoJulgador', 'dataAjuizamento', 'sistema', 'formato', 'valorCausa', 'situacao', 'tribunal']) {
+  for (const campo of ['classe', 'orgaoJulgador', 'dataAjuizamento', 'sistema', 'formato', 'valorCausa', 'situacao', 'tribunal', 'juiz', 'area']) {
     if (!r[campo] && extra[campo]) r[campo] = extra[campo];
   }
   if (extra.ultimaAtualizacao && (!r.ultimaAtualizacao || extra.ultimaAtualizacao > r.ultimaAtualizacao)) {
@@ -63,11 +65,22 @@ function mesclarProcessos(base, extra) {
   const assuntos = new Map([...(base.assuntos || []), ...(extra.assuntos || [])].map((a) => [a.codigo || a.nome, a]));
   r.assuntos = [...assuntos.values()];
   if (!r.partes?.length) r.partes = extra.partes || [];
-  const movs = new Map();
-  for (const m of [...(base.movimentos || []), ...(extra.movimentos || [])]) {
-    if (!movs.has(chaveMovimento(m))) movs.set(chaveMovimento(m), m);
+  // Fontes descrevem o mesmo andamento com textos diferentes (ex.: TPU do DataJud
+  // x texto do portal do tribunal). Se as prioridades diferem, fica a lista da
+  // fonte mais detalhada; se são iguais, une sem duplicar.
+  const pb = base.movimentos?.length ? (base.prioridadeMovimentos ?? 1) : -1;
+  const pe = extra.movimentos?.length ? (extra.prioridadeMovimentos ?? 1) : -1;
+  if (pb !== pe) {
+    r.movimentos = ordenarMovimentos([...((pe > pb ? extra : base).movimentos || [])]);
+    r.prioridadeMovimentos = Math.max(pb, pe);
+  } else {
+    const movs = new Map();
+    for (const m of [...(base.movimentos || []), ...(extra.movimentos || [])]) {
+      if (!movs.has(chaveMovimento(m))) movs.set(chaveMovimento(m), m);
+    }
+    r.movimentos = ordenarMovimentos([...movs.values()]);
   }
-  r.movimentos = ordenarMovimentos([...movs.values()]);
+  r.avisos = [...new Set([...(base.avisos || []), ...(extra.avisos || [])])];
   r.fontes = [...new Set([...(base.fontes || []), ...(extra.fontes || [])])];
   return r;
 }

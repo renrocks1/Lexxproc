@@ -4,7 +4,9 @@
   "description": "Sistema de consulta e acompanhamento de processos judiciais (DataJud/CNJ, Escavador, Judit)",
   "main": "src/server.js",
   "type": "commonjs",
-  "engines": { "node": ">=22.5" },
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/server.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
@@ -13,6 +15,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "cheerio": "^1.2.0",
     "express": "^5.1.0"
   }
 }

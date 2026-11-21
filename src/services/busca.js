@@ -69,7 +69,7 @@ function criarServicoBusca({ provedores, repo, config }) {
     return { processo, cache: false, erros };
   }
 
-  async function buscar(termo, { atualizar = false } = {}) {
+  async function buscar(termo, { atualizar = false, tribunais = [] } = {}) {
     const t = String(termo || '').trim();
     if (t.length < 3) throw new BuscaError('Digite ao menos 3 caracteres.');
     const det = detectarTipoBusca(t);
@@ -94,7 +94,7 @@ function criarServicoBusca({ provedores, repo, config }) {
       );
     }
 
-    const chave = `busca:${det.tipo}:${det.valor.toLowerCase()}`;
+    const chave = `busca:${det.tipo}:${det.valor.toLowerCase()}:${[...tribunais].sort().join(',')}`;
     if (!atualizar) {
       const emCache = repo.cacheGet(chave);
       if (emCache) return { ...emCache, cache: true };
@@ -103,25 +103,31 @@ function criarServicoBusca({ provedores, repo, config }) {
     const metodo = METODOS[det.tipo];
     const arg = det.tipo === 'oab' ? det.info : det.valor;
     const erros = [];
+    const avisos = [];
     const mapa = new Map();
-    const respostas = await Promise.allSettled(provs.map((p) => p[metodo](arg)));
+    const respostas = await Promise.allSettled(provs.map((p) => p[metodo](arg, { tribunais })));
     respostas.forEach((r, i) => {
       if (r.status === 'rejected') {
         erros.push({ provedor: provs[i].nome, mensagem: r.reason?.message || String(r.reason) });
         return;
       }
+      erros.push(...(r.value.erros || []));
+      avisos.push(...(r.value.avisos || []));
       for (const item of r.value.resultados || []) {
         const atual = mapa.get(item.numero);
         mapa.set(item.numero, atual ? { ...atual, fontes: [...new Set([...atual.fontes, ...item.fontes])] } : item);
       }
     });
 
-    if (!mapa.size && erros.length === provs.length) {
-      throw new BuscaError('Não foi possível consultar as fontes no momento.', 502, { erros });
+    const falharam = respostas.filter((r) => r.status === 'rejected');
+    if (!mapa.size && falharam.length === provs.length) {
+      // Um único provedor com erro "de negócio" (ex.: refine a busca) vira mensagem direta.
+      const status = falharam.length === 1 && falharam[0].reason?.status === 422 ? 422 : 502;
+      throw new BuscaError(status === 422 ? falharam[0].reason.message : 'Não foi possível consultar as fontes no momento.', status, { erros });
     }
     const resultados = [...mapa.values()]
       .sort((a, b) => String(b.ultimaAtualizacao || '').localeCompare(String(a.ultimaAtualizacao || '')));
-    const resposta = { tipo: det.tipo, termo: det.valor, total: resultados.length, resultados, erros };
+    const resposta = { tipo: det.tipo, termo: det.valor, total: resultados.length, resultados, erros, avisos };
     if (!erros.length) repo.cacheSet(chave, resposta, config.cacheTtlSeconds);
     repo.registrarBusca(det.valor, det.tipo, resultados.length);
     return { ...resposta, cache: false };
@@ -144,6 +150,10 @@ function criarServicoBusca({ provedores, repo, config }) {
     buscarProcesso,
     buscaAvancada,
     provedoresAtivos: () => provedores.map((p) => ({ nome: p.nome, rotulo: p.rotulo, habilitado: p.habilitado, suporta: p.suporta })),
+    raspagem: () => {
+      const r = provedores.find((p) => p.nome === 'raspagem');
+      return r ? { habilitado: r.habilitado, tribunais: r.tribunais, hosts: r.estadoHosts() } : null;
+    },
   };
 }
 
