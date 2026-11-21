@@ -108,3 +108,21 @@ test('monitoramento não gera alertas falsos quando a fonte das movimentações 
   assert.equal(v.body.novos, 0);
   assert.equal((await s.req('/alertas')).body.naoLidos, 0);
 });
+
+test('processo fora do e-SAJ (eproc do TJSP): 404 com links para consulta manual', async (t) => {
+  const portal = await portalSimulado();
+  t.after(() => portal.server.close());
+  const cfg = config();
+  const raspagem = criarRaspagem(cfg, { tribunais: [{ sigla: 'TJSP', sistema: 'esaj', base: portal.base, verificado: true }] });
+  const semDataJud = { ...dataJudFalso(), async buscarPorNumero() { return null; } };
+  const ctx = criarApp(cfg, { provedores: [semDataJud, raspagem], logger: { info() {}, warn() {}, error() {} } });
+  const server = await new Promise((r) => { const s = ctx.app.listen(0, () => r(s)); });
+  t.after(() => new Promise((r) => server.close(r)));
+  // Mesmo formato do número de teste real (4080372-82.2025.8.26.0100), que não está no e-SAJ.
+  const res = await fetch(`http://127.0.0.1:${server.address().port}/api/processos/40803728220258260100`);
+  const body = await res.json();
+  assert.equal(res.status, 404);
+  assert.match(body.erro, /eproc/);
+  assert.ok(body.consultaManual.some((p) => p.sistema === 'eproc' && p.exigeVerificacaoHumana));
+  assert.ok(body.consultaManual.some((p) => p.url.endsWith('/cpopg/open.do')));
+});

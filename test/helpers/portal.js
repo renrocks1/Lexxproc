@@ -15,6 +15,10 @@ function portalSimulado({ captcha = false } = {}) {
     const temSessao = /JSESSIONID=abc/.test(req.headers.cookie || '');
     const html = (corpo) => { res.writeHead(200, { 'Content-Type': 'text/html;charset=UTF-8' }); res.end(corpo); };
     if (captcha) return html(fx('captcha.html'));
+    if (u.pathname === '/cpopg/search.do' && u.searchParams.get('cbPesquisa') === 'NUMPROC'
+      && u.searchParams.get('numeroDigitoAnoUnificado').startsWith('4')) {
+      return html(fx('lista-vazia.html'));
+    }
     if (u.pathname === '/cpopg/search.do' && u.searchParams.get('cbPesquisa') === 'NUMPROC') {
       res.writeHead(302, { Location: '/cpopg/show.do?processo.codigo=1H00112CM0000&processo.foro=100', 'Set-Cookie': 'JSESSIONID=abc; Path=/cpopg; HttpOnly' });
       return res.end();

@@ -287,10 +287,28 @@
       try { decomp = blocoCNJ(await api(`/cnj/${numero}`)); } catch { /* ignora */ }
       $app.innerHTML = html`
         <a class="voltar" href="#/">← Nova consulta</a>
-        <div class="card"><h1 class="proc-numero">${fmtCNJ(numero)}</h1>${raw(erroBox(e))}${raw(errosProvedores(e.dados?.erros))}${raw(decomp)}</div>`;
+        <div class="card"><h1 class="proc-numero">${fmtCNJ(numero)}</h1>${raw(erroBox(e))}${raw(errosProvedores(e.dados?.erros))}
+          ${raw(blocoConsultaManual(e.dados?.consultaManual, numero))}${raw(decomp)}</div>`;
+      ligarCopiar();
       return;
     }
     renderProcesso(r);
+  }
+
+  function blocoConsultaManual(portais, numero) {
+    if (!portais?.length) return '';
+    return html`<div class="consulta-manual">
+      <h3>Consultar no portal do tribunal</h3>
+      <div class="acoes">
+        ${portais.map((p) => raw(html`<a class="btn btn-pequeno" href="${p.url}" target="_blank" rel="noopener">${p.exigeVerificacaoHumana ? '🔒 ' : ''}${p.rotulo} ↗</a>`))}
+        <button class="btn btn-pequeno" type="button" data-copiar="${fmtCNJ(numero)}">Copiar número</button>
+      </div>
+      ${portais.some((p) => p.exigeVerificacaoHumana) ? raw('<p class="mudo">🔒 Exige verificação humana (CAPTCHA): a consulta precisa ser feita por você no navegador.</p>') : ''}
+    </div>`;
+  }
+
+  function ligarCopiar() {
+    $app.querySelectorAll('[data-copiar]').forEach((b) => b.addEventListener('click', () => copiar(b.dataset.copiar)));
   }
 
   function blocoCNJ(info) {
@@ -435,6 +453,7 @@
     ].filter(([, v]) => v && v !== '—');
     document.getElementById('aba-det').innerHTML = html`
       <dl class="detalhes">${linhas.map(([k, v]) => raw(html`<dt>${k}</dt><dd>${v}</dd>`))}</dl>
+      ${raw(blocoConsultaManual(r.consultaManual, p.numero))}
       <div id="decomp"></div>`;
     api(`/cnj/${p.numero}`).then((info) => { document.getElementById('decomp').innerHTML = blocoCNJ(info); }).catch(() => {});
 

@@ -42,7 +42,11 @@ function poloDe(tipo) {
 /** Identifica bloqueios por verificação humana. Não confundir com o script que sempre cita "captcha". */
 function exigeCaptcha(html) {
   const $ = cheerio.load(html);
-  return $('.g-recaptcha, .h-captcha, iframe[src*="recaptcha"], iframe[src*="hcaptcha"], #captchaInfo, img[src*="captcha" i], input[name="g-recaptcha-response"]').length > 0;
+  return $([
+    '.g-recaptcha', '.h-captcha', '.cf-turnstile', 'iframe[src*="recaptcha"]', 'iframe[src*="hcaptcha"]',
+    'iframe[src*="challenges.cloudflare.com"]', 'script[src*="challenges.cloudflare.com/turnstile"]',
+    '#captchaInfo', 'img[src*="captcha" i]', 'input[name="g-recaptcha-response"]',
+  ].join(', ')).length > 0;
 }
 
 /** Mensagens de retorno do formulário de pesquisa. */

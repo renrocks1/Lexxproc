@@ -90,6 +90,7 @@ test('parseMovimentacoes lida com bloco inicial e linhas soltas (AJAX)', () => {
 
 test('detecção de CAPTCHA não dispara com o script padrão da página', () => {
   assert.equal(exigeCaptcha(fx('captcha.html')), true);
+  assert.equal(exigeCaptcha(fx('turnstile.html')), true, 'Cloudflare Turnstile (eproc do TJSP)');
   assert.equal(exigeCaptcha(fx('detalhe-tjsp.html')), false);
 });
 

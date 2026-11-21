@@ -83,6 +83,10 @@ Raspadores ficam em `src/scrapers/`. O primeiro sistema suportado é o **e-SAJ**
 | TJAL | www2.tjal.jus.br/cpopg | ✓ (nov/2026) |
 | TJAM, TJMS, TJAC, TJCE | portais e-SAJ | mesmo sistema, ainda não conferido |
 
+> **TJSP e eproc:** desde 2025 o TJSP distribui processos novos no **eproc** (mais de 1,4 milhão até agora). A consulta
+> pública do eproc do TJSP é protegida por Cloudflare Turnstile, então esses processos **não são raspados**: eles
+> aparecem pelo DataJud (sem partes) e, quando não encontrados, o sistema mostra o link para consulta manual.
+
 Como funciona: `search.do` (lista ou redireciona direto ao processo) → `show.do` (capa e partes) →
 `carregarMovimentacoesAjax.do` (movimentações; no TJSP são carregadas sob demanda, com paginação por cursor e exigem o
 cookie de sessão). Os parsers são funções puras testadas com fixtures em `test/fixtures/esaj/` que reproduzem a marcação

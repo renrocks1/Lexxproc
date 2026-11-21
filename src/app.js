@@ -14,6 +14,7 @@ const { criarServicoBusca } = require('./services/busca');
 const { criarMonitor } = require('./services/monitor');
 const { parseCNJ, detectarTipoBusca } = require('./lib/cnj');
 const { TRIBUNAIS } = require('./lib/tribunais');
+const { portaisConsultaManual } = require('./scrapers/registro');
 
 function criarProvedores(config) {
   if (config.demoMode) return [criarDemo()];
@@ -125,15 +126,26 @@ function criarApp(config, { provedores, logger = console } = {}) {
     const r = await busca.buscarProcesso(req.params.numero, { atualizar: req.query.atualizar === '1' });
     if (!r.processo) {
       const t = r.info?.tribunal;
+      const portais = t ? portaisConsultaManual(t.sigla) : [];
+      const eproc = portais.find((p) => p.sistema === 'eproc');
       return res.status(404).json({
         erro: t && !t.alias
           ? `O ${t.sigla} não está disponível na API pública do DataJud.`
-          : 'Processo não encontrado. Ele pode estar em segredo de justiça ou ainda não ter sido indexado pelo tribunal.',
+          : eproc
+            ? `Processo não encontrado no DataJud nem no e-SAJ do ${t.sigla}. Processos distribuídos a partir de 2025 podem estar no eproc, `
+              + 'cuja consulta pública exige verificação humana e por isso não é feita automaticamente — consulte pelo link abaixo.'
+            : 'Processo não encontrado. Ele pode estar em segredo de justiça ou ainda não ter sido indexado pelo tribunal.',
+        consultaManual: portais,
         erros: r.erros,
       });
     }
     const monitorado = repo.obterMonitorado(r.processo.numero);
-    return res.json({ ...r, monitorado: Boolean(monitorado), apelido: monitorado?.apelido || null });
+    return res.json({
+      ...r,
+      monitorado: Boolean(monitorado),
+      apelido: monitorado?.apelido || null,
+      consultaManual: r.processo.tribunal ? portaisConsultaManual(r.processo.tribunal.sigla) : [],
+    });
   }));
 
   // ---- Monitoramento ----
